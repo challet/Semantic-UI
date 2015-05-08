@@ -452,12 +452,12 @@ a.ui.label:hover:before {
   background-color: #d0d0d0;
   border-color: #d0d0d0;
   background-image: none;
-  color: rgba(0, 0, 0, 0.9);
+  color: rgba(0, 0, 0, 0.95);
 }
 .ui.active.label:before {
   background-color: #d0d0d0;
   background-image: none;
-  color: rgba(0, 0, 0, 0.9);
+  color: rgba(0, 0, 0, 0.95);
 }
 
 /*-------------------
@@ -469,13 +469,13 @@ a.ui.active.label:hover {
   background-color: #c8c8c8;
   border-color: #c8c8c8;
   background-image: none;
-  color: rgba(0, 0, 0, 0.9);
+  color: rgba(0, 0, 0, 0.95);
 }
 .ui.labels a.active.label:ActiveHover:before,
 a.ui.active.label:ActiveHover:before {
   background-color: #c8c8c8;
   background-image: none;
-  color: rgba(0, 0, 0, 0.9);
+  color: rgba(0, 0, 0, 0.95);
 }
 
 /*-------------------

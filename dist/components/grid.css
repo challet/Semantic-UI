@@ -1350,7 +1350,7 @@ body > .ui.grid {
 .ui.grid > .white.column,
 .ui.grid > .row > .white.column {
   background-color: #ffffff !important;
-  color: rgba(0, 0, 0, 0.8);
+  color: rgba(0, 0, 0, 0.87);
 }
 .ui.grid > .row > .white.column {
   margin-top: -1rem;

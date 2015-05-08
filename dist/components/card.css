@@ -129,12 +129,14 @@
   display: block;
   width: 100%;
   height: auto;
-  border-radius: 0.2857rem 0.2857rem 0em 0em;
+  border-radius: inherit;
   border: none;
 }
-.ui.cards > .card > .image:only-child > img,
-.ui.card > .image:only-child > img {
-  border-radius: 0.2857rem;
+.ui.cards > .card > :first-child {
+  border-radius: 0.2857rem 0.2857rem 0em 0em;
+}
+.ui.cards > .card > :last-child {
+  border-radius: 0em 0em 0.2857rem 0.2857rem;
 }
 
 /*--------------
@@ -225,14 +227,14 @@
 .ui.card .content img {
   display: inline-block;
   vertical-align: middle;
-  width: auto;
+  width: '';
 }
 .ui.cards > .card img.avatar,
 .ui.cards > .card .avatar img,
 .ui.card img.avatar,
 .ui.card .avatar img {
-  width: 2.5em;
-  height: 2.5em;
+  width: 2em;
+  height: 2em;
   border-radius: 500rem;
 }
 
@@ -243,7 +245,7 @@
 .ui.cards > .card > .content > .description,
 .ui.card > .content > .description {
   clear: both;
-  color: rgba(0, 0, 0, 0.5);
+  color: rgba(0, 0, 0, 0.68);
 }
 
 /*--------------
@@ -316,7 +318,7 @@
 }
 .ui.cards > .card .meta > a:not(.ui):hover,
 .ui.card .meta > a:not(.ui):hover {
-  color: rgba(0, 0, 0, 0.8);
+  color: rgba(0, 0, 0, 0.87);
 }
 
 /*--------------
