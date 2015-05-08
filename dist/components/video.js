@@ -93,8 +93,7 @@ $.fn.video = function(parameters) {
         },
 
         create: function() {
-          $video = element
-          module.debug('Reefrencing html for video element');
+          module.debug('Video create called');
         },
         
         
