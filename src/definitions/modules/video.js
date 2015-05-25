@@ -37,6 +37,19 @@ function utilReadableTime(timeMs) {
   return readable;
 }
 
+function utilVoidCallback(event) {
+  event.preventDefault();
+  $(this).blur();
+}
+
+function utilAddNamespaceToEvents(events, namespace) {
+  var events_with_namespace = [];
+  while(events.length > 0) {
+    events_with_namespace.push(events.pop() + namespace)
+  }
+  return events_with_namespace.join(' ');
+}
+
 $.fn.video = function(parameters) {
 
   var
@@ -98,16 +111,13 @@ $.fn.video = function(parameters) {
         $seekableCheckbox           = $module.find(settings.selector.seekableCheckbox),
         $playedCheckbox             = $module.find(settings.selector.playedCheckbox),
         $seekingStateCheckbox       = $module.find(settings.selector.seekingStateCheckbox),
-        $seekingStateDimmer         = $module.find(settings.selector.seekingStateDimmer).dimmer({duration:{hide:1000}}),
+        $seekingStateDimmer         = $module.find(settings.selector.seekingStateDimmer),
 
         timeRangeUpdateEnabled      = true,
         timeRangeInterval           = $timeRange.prop('max') - $timeRange.prop('min'),
         
-        seekLoopCounter             = window.setTimeout(1, function(){} ), // subsequent calls to window.clearTimeout won't break
         seekLoopInitialPlayState    = undefined, // it actually means undefined, see seek.tickLoop and seek.stopLoop functions,
-        seekLoopStarted             = false,
-      
-        seekedDelay                 = window.setTimeout(1, function(){} ), // subsequent calls to window.clearTimeout won't break
+        seekedTimer                 = window.setTimeout(1, function(){} ), // subsequent calls to window.clearTimeout won't break
 
         element                     = this,
         video                       = $video.get(0),
@@ -120,6 +130,7 @@ $.fn.video = function(parameters) {
         initialize: function() {
           module.debug('Initializing video');
           module.instantiate();
+          module.bind.pushes();
           module.bind.events();
           module.initialValues(); 
         },
@@ -133,42 +144,47 @@ $.fn.video = function(parameters) {
         },
         
         bind: {
+          pushes: function() {
+            // sub-module init
+            $seekButton.push({
+              onStart: module.activate.holdPlayState,
+              onStop: module.deactivate.holdPlayState
+            });
+          },
           events: function() {
             module.debug('Binding video module events');
             // from video to UI
             $video
-              .on('play' + eventNamespace + ' playing' + eventNamespace + ' pause' + eventNamespace + ' ended' + eventNamespace, module.update.playState)
-              .on('ratechange' + eventNamespace, module.update.rate)
-              .on('timeupdate' + eventNamespace, module.update.time) // TODO limit throttle
-              .on('seeking' + eventNamespace, module.update.seeking)
-              .on('seeked' + eventNamespace, module.update.seeked)
-              .on('volumechange' + eventNamespace, module.update.volume)
-              .on('canplaythrough' + eventNamespace + ' canplay' + eventNamespace + ' loadeddata' + eventNamespace + ' loadedmetadata' + eventNamespace + ' emptied' + eventNamespace + ' waiting' + eventNamespace, module.update.readyState)
-              .on('error' + eventNamespace + ' loadstart' + eventNamespace + ' emptied' + eventNamespace + ' stalled' + eventNamespace + ' suspend' + eventNamespace + ' waiting' + eventNamespace + ' loadedmetadata' + eventNamespace + ' loadeddata' + eventNamespace, module.update.networkState)
+              .on(utilAddNamespaceToEvents(['play', 'playing', 'pause', 'ended'], eventNamespace), module.update.playState)
+              .on(utilAddNamespaceToEvents(['ratechange'], eventNamespace), module.update.rate)
+              .on(utilAddNamespaceToEvents(['timeupdate'], eventNamespace), module.update.time) // TODO limit throttle
+              .on(utilAddNamespaceToEvents(['seeking'], eventNamespace), module.update.seeking)
+              .on(utilAddNamespaceToEvents(['seeked'], eventNamespace), module.update.seeked)
+              .on(utilAddNamespaceToEvents(['volumechange'], eventNamespace), module.update.volume)
+              .on(utilAddNamespaceToEvents(['canplaythrough', 'canplay', 'loadeddata', 'emptied', 'waiting'], eventNamespace), module.update.readyState)
+              .on(utilAddNamespaceToEvents(['error', 'loadstart', 'emptied', 'stalled', 'suspend', 'waiting', 'loadedmetadata', 'loadeddata'], eventNamespace), module.update.networkState)
             ;
             
             // from UI to video
-            $playButton
-              .on('click' + eventNamespace, module.request.playToggle)
-            ;
-            $seekButton
-              .on('mousedown' + eventNamespace, module.request.seek.tickLoop)
-              .on('mouseup' + eventNamespace + 'mouseleave' + eventNamespace + 'mouseout' + eventNamespace + 'click' + eventNamespace, module.request.seek.stopLoop)
-            ;
+            $playButton.on(utilAddNamespaceToEvents(['click'], eventNamespace), module.request.playToggle);
+            $seekButton.on(utilAddNamespaceToEvents(['click'], eventNamespace), module.request.seek.toRelativeTime);
             $timeRange
-              .on('change' + eventNamespace, module.request.seek.fromRangeValue) 
-              .on('mousedown' + eventNamespace, module.deactivate.timeRangeUpdate)
-              .on('mouseup' + eventNamespace, module.activate.timeRangeUpdate)
+              .on(utilAddNamespaceToEvents(['change'], eventNamespace), module.request.seek.fromRangeValue)
+              .on(utilAddNamespaceToEvents(['mousedown'], eventNamespace), module.deactivate.timeRangeUpdate)
+              .on(utilAddNamespaceToEvents(['mouseup'], eventNamespace), module.activate.timeRangeUpdate)
+              .on(utilAddNamespaceToEvents(['click'], eventNamespace), utilVoidCallback)
+              //.on(utilAddNamespaceToEvents(['focus'], eventNamespace), module.activate.timeLookup) // better naming than timeLookup ?
+              //.on(utilAddNamespaceToEvents(['blur'], eventNamespace), module.deactivate.timeLookup)
             ;
-            $volumeUpButton.on('click' + eventNamespace, module.request.volumeUp);
-            $volumeDownButton.on('click' + eventNamespace, module.request.volumeDown);
-            $volumeProgress.on('click' + eventNamespace, module.request.unmute);
-            $muteButton.on('click' + eventNamespace, module.request.muteToggle);
-            $rateInput.on('change' + eventNamespace, module.request.rate);
-            $rateReset.on('click' + eventNamespace, module.reset.rate);
-            $readyStateRadio.on('click' + eventNamespace, module.request.denied);
-            $networkStateRadio.on('click' + eventNamespace, module.request.denied); // preventDefault
-            $statesLabel.on('click' + eventNamespace, module.request.denied); // preventDefault
+            $volumeUpButton.on(utilAddNamespaceToEvents(['click'], eventNamespace), module.request.volumeUp);
+            $volumeDownButton.on(utilAddNamespaceToEvents(['click'], eventNamespace), module.request.volumeDown);
+            $volumeProgress.on(utilAddNamespaceToEvents(['click'], eventNamespace), module.request.unmute);
+            $muteButton.on(utilAddNamespaceToEvents(['click'], eventNamespace), module.request.muteToggle);
+            $rateInput.on(utilAddNamespaceToEvents(['change'], eventNamespace), module.request.rate);
+            $rateReset.on(utilAddNamespaceToEvents(['click'], eventNamespace), module.reset.rate);
+            $readyStateRadio.on(utilAddNamespaceToEvents(['click'], eventNamespace), module.request.denied);
+            $networkStateRadio.on(utilAddNamespaceToEvents(['click'], eventNamespace), utilVoidCallback);
+            $statesLabel.on(utilAddNamespaceToEvents(['click'], eventNamespace), utilVoidCallback);
           }
         },
         
@@ -288,21 +304,27 @@ $.fn.video = function(parameters) {
             if(timeRangeUpdateEnabled) {
               $timeRange.val( timeRangeInterval * currentTime / duration );
             }
-            // is currentTime in various TimeRanges (should always be true whern play is on)
-            $bufferCheckbox.prop('checked', module.is.timeBuffered(currentTime));
-            $seekableCheckbox.prop('checked', module.is.timeSeekable(currentTime));
-            $playedCheckbox.prop('checked', module.is.timePlayed(currentTime));
+            // TODO: refactor as a virtual time indicator based on the time range "dragged" time
+            // wether the currentTime fits in various TimeRanges ()
+            // NOTE: should always be true when normal expected play is on, since "played" seems to be written before to be read (on FF 38.0.1)
+            // $bufferCheckbox.prop('checked', module.is.timeBuffered(currentTime));
+            // $seekableCheckbox.prop('checked', module.is.timeSeekable(currentTime));
+            // $playedCheckbox.prop('checked', module.is.timePlayed(currentTime));
           },
           seeking: function() {
             module.debug('Update seek state (seeking)');
-            window.clearTimeout(seekedDelay);
+            window.clearTimeout(seekedTimer);
             $seekingStateCheckbox.prop('checked', true);
             $seekingStateDimmer.dimmer('show');
           },
-          seeked: function() {
+          seeked: function(event) {
             module.debug('Update seek state (seeked)');
-            // a seeking loop makes "seeking" and "seeked" events to fire alternatively, making the elements to blink
-            if(!seekLoopStarted && !module.is.seeking()) { 
+            // a seeking loop makes "seeking" and "seeked" events to fire alternatively, add a delay to prevent the elements to blink
+            if(event !== undefined) {
+              // an real undelayed event has occured 
+              seekedTimer = window.setTimeout(module.update.seeked, setttings.seekedDelay);
+            } else {
+              // it has been delayed and now is handled through the UI
               $seekingStateCheckbox.prop('checked', false);
               $seekingStateDimmer.dimmer('hide');
             }
@@ -389,39 +411,6 @@ $.fn.video = function(parameters) {
               var ratio = $timeRange.val() / timeRangeInterval;
               var position = module.get.duration() * ratio;
               module.request.seek.toAbsoluteTime(position);
-            },
-            tickLoop: function() {
-              // TODO: abstract to a 'push' button behavior ?
-              module.debug('Tick seek loop');
-              window.clearTimeout(seekLoopCounter);
-              if(seekLoopInitialPlayState === undefined) {
-                // force pause while loop seeking
-                seekLoopInitialPlayState = module.is.playing();
-                module.request.pause();
-              } else {
-                // don't move on the first iteration
-                seekLoopStarted = true;
-                module.request.seek.toRelativeTime.bind(this)();
-              }
-              // bindings are made in order to later access $(this)
-              seekLoopCounter = window.setTimeout(module.request.seek.tickLoop.bind(this), parseInt( $(this).data('seek-interval') ));
-            },
-            stopLoop: function() {
-              module.debug('Stop seek loop');
-              window.clearTimeout(seekLoopCounter);
-              if(seekLoopInitialPlayState) {
-                module.request.play();
-              } 
-              seekLoopInitialPlayState = undefined;
-              
-              // one final move if the loop has 0 iteration (~ click)
-              if(!seekLoopStarted) {
-                module.request.seek.toRelativeTime.bind(this)();
-              }
-              seekLoopStarted = false;
-              
-              // the seek indicator might have been force-enabled during the loop
-              module.update.seeked();
             }
           },
           volumeUp: function() {
@@ -462,6 +451,11 @@ $.fn.video = function(parameters) {
           timeRangeUpdate: function() {
             module.debug('Activate timeRange autoupdate');
             timeRangeUpdateEnabled = true;
+          },
+          holdPlayState: function() {
+            module.debug('Hold play state (while an other operation is occuring)');
+            seekLoopInitialPlayState = module.is.playing();
+            module.request.pause();
           }
         },
         
@@ -469,6 +463,13 @@ $.fn.video = function(parameters) {
           timeRangeUpdate: function() {
             module.debug('Deactivate timeRange autoupdate');
             timeRangeUpdateEnabled = false;
+          },
+          holdPlayState: function() {
+            module.debug('Unhold play state (after an other operation has occured)');
+            if(seekLoopInitialPlayState) {
+              module.request.play();
+            }
+            seekLoopInitialPlayState = undefined;
           }
         },
         
@@ -695,7 +696,7 @@ $.fn.video.settings = {
 
   debug       : true,
   verbose     : true,
-  performance : true,
+  performance : false,
 
   className   : {
     active      : 'active',
@@ -742,6 +743,7 @@ $.fn.video.settings = {
   },
   
   volumeStep: 0.1 // it moves from 0.0 to 1.0, TODO: use a data-* attribute
+  seekedDelay: 250 // ms
   
 };
 
