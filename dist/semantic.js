@@ -9770,6 +9770,369 @@ $.fn.progress.settings = {
 
 })( jQuery, window , document );
 /*!
+ * # Semantic UI 2.0.0 - Push
+ * http://github.com/semantic-org/semantic-ui/
+ *
+ *
+ * Copyright 2015 Contributorss
+ * Released under the MIT license
+ * http://opensource.org/licenses/MIT
+ *
+ */
+
+;(function ($, window, document, undefined) {
+
+"use strict";
+
+function utilAddNamespaceToEvents(events, namespace) {
+  var events_with_namespace = [];
+  while(events.length > 0) {
+    events_with_namespace.push(events.pop() + namespace)
+  }
+  return events_with_namespace.join(' ');
+}
+
+$.fn.push = function(parameters) {
+
+  var
+    $allModules     = $(this),
+
+    moduleSelector  = $allModules.selector || '',
+
+    time            = new Date().getTime(),
+    performance     = [],
+
+    query           = arguments[0],
+    methodInvoked   = (typeof query == 'string'),
+    queryArguments  = [].slice.call(arguments, 1),
+
+    requestAnimationFrame = window.requestAnimationFrame
+      || window.mozRequestAnimationFrame
+      || window.webkitRequestAnimationFrame
+      || window.msRequestAnimationFrame
+      || function(callback) { setTimeout(callback, 0); },
+
+    returnedValue
+  ;
+  
+  $allModules
+    .each(function() {
+      var
+        settings        = ( $.isPlainObject(parameters) )
+          ? $.extend(true, {}, $.fn.push.settings, parameters)
+          : $.extend({}, $.fn.push.settings),
+
+        selector                    = settings.selector,
+        className                   = settings.className,
+        error                       = settings.error,
+        metadata                    = settings.metadata,
+        namespace                   = settings.namespace,
+        templates                   = settings.templates,
+
+        eventNamespace              = '.' + namespace,
+        moduleNamespace             = 'module-' + namespace,
+
+        $window                     = $(window),
+        $module                     = $(this),
+        
+        tickTimer                   = null,
+        hadTicked                   = false,
+        
+        element                     = this,
+        instance                    = $module.data(moduleNamespace),
+        module
+      ;
+
+      module = {
+
+        initialize: function() {
+          module.debug('Initializing push behavior');
+          module.instantiate();
+          module.bind.events();
+        },
+        
+        instantiate: function() {
+          module.verbose('Storing instance of module', module);
+          instance = module;
+          $module
+            .data(moduleNamespace, module)
+          ;
+        },
+        
+        bind: {
+          events: function() {
+            module.debug('Binding push module events');
+            $module
+              .on(utilAddNamespaceToEvents(['mousedown'], eventNamespace), module.tickLoop)
+              .on(utilAddNamespaceToEvents(['mouseup'/*, 'mouseleave', 'mouseout'*/], eventNamespace), module.stopLoop) // /!\ don't add 'click' or recursive hole
+              .on(utilAddNamespaceToEvents(['click'], eventNamespace), module.filterClick)
+            ;
+          }
+        },
+        
+        
+        tickLoop: function() {
+          module.debug('loop iterates');
+          
+          // don't move on the first iteration (actual mousedown event)
+          if(tickTimer !== null) {
+            hadTicked = true;
+            $module.click() // .trigger() seems not to be DOM related, but only jQuery internal (?)
+          } else {
+            console.log('onStart');
+            settings.onStart();
+          }
+          // (re)start the loop, bindings are made in order to later access $(this)
+          tickTimer = window.setTimeout(module.tickLoop.bind(this), parseInt( $(this).data('push-interval') ));
+        },
+        
+        stopLoop: function(event) {
+          module.debug('loop stops');
+          // one click if the loop hadn't ticked (~ real click)
+          if(tickTimer !== null && !hadTicked) {
+            $module.click() // .trigger() seems not to be DOM related, but only jQuery internal (?)
+          }
+          window.clearTimeout(tickTimer);
+          tickTimer = null;
+          hadTicked = false;
+          settings.onStop();
+        },
+        
+        filterClick: function(event) {
+           module.debug('click is filtered');
+          // human clicks are void (though they are re-triggered though the mousedown/mouseup behaviors combination)
+          if(event.isTrigger === undefined) {
+            event.stopImmediatePropagation(); // it requires .push() event bindings to have been done before any other init
+            event.preventDefault();
+          }
+        },
+        
+        reset: function() {
+          module.debug('Clearing push');
+          settings.onReset();
+        },
+        
+        destroy: function() {
+          module.verbose('Destroying previous instance of push');
+          module.reset();
+          $module
+            .removeData(moduleNamespace)
+            .off(eventNamespace)
+          ;
+        },
+        
+        refresh: function() {
+          module.verbose('Refreshing selector cache');
+        },
+        
+        setting: function(name, value) {
+          module.debug('Changing setting', name, value);
+          if( $.isPlainObject(name) ) {
+            $.extend(true, settings, name);
+          }
+          else if(value !== undefined) {
+            settings[name] = value;
+          }
+          else {
+            return settings[name];
+          }
+        },
+        
+        internal: function(name, value) {
+          if( $.isPlainObject(name) ) {
+            $.extend(true, module, name);
+          }
+          else if(value !== undefined) {
+            module[name] = value;
+          }
+          else {
+            return module[name];
+          }
+        },
+        
+        debug: function() {
+          if(settings.debug) {
+            if(settings.performance) {
+              module.performance.log(arguments);
+            }
+            else {
+              module.debug = Function.prototype.bind.call(console.info, console, settings.name + ':');
+              module.debug.apply(console, arguments);
+            }
+          }
+        },
+        
+        verbose: function() {
+          if(settings.verbose && settings.debug) {
+            if(settings.performance) {
+              module.performance.log(arguments);
+            }
+            else {
+              module.verbose = Function.prototype.bind.call(console.info, console, settings.name + ':');
+              module.verbose.apply(console, arguments);
+            }
+          }
+        },
+        
+        error: function() {
+          module.error = Function.prototype.bind.call(console.error, console, settings.name + ':');
+          module.error.apply(console, arguments);
+        },
+        
+        performance: {
+          log: function(message) {
+            var
+              currentTime,
+              executionTime,
+              previousTime
+            ;
+            if(settings.performance) {
+              currentTime   = new Date().getTime();
+              previousTime  = time || currentTime;
+              executionTime = currentTime - previousTime;
+              time          = currentTime;
+              performance.push({
+                'Name'           : message[0],
+                'Arguments'      : [].slice.call(message, 1) || '',
+                'Element'        : element,
+                'Execution Time' : executionTime
+              });
+            }
+            clearTimeout(module.performance.timer);
+            module.performance.timer = setTimeout(module.performance.display, 500);
+          },
+          
+          display: function() {
+            var
+              title = settings.name + ':',
+              totalTime = 0
+            ;
+            time = false;
+            clearTimeout(module.performance.timer);
+            $.each(performance, function(index, data) {
+              totalTime += data['Execution Time'];
+            });
+            title += ' ' + totalTime + 'ms';
+            if(moduleSelector) {
+              title += ' \'' + moduleSelector + '\'';
+            }
+            if($allModules.length > 1) {
+              title += ' ' + '(' + $allModules.length + ')';
+            }
+            if( (console.group !== undefined || console.table !== undefined) && performance.length > 0) {
+              console.groupCollapsed(title);
+              if(console.table) {
+                console.table(performance);
+              }
+              else {
+                $.each(performance, function(index, data) {
+                  console.log(data['Name'] + ': ' + data['Execution Time']+'ms');
+                });
+              }
+              console.groupEnd();
+            }
+            performance = [];
+          },
+        
+          invoke: function(query, passedArguments, context) {
+            var
+              object = instance,
+              maxDepth,
+              found,
+              response
+            ;
+            passedArguments = passedArguments || queryArguments;
+            context         = element         || context;
+            if(typeof query == 'string' && object !== undefined) {
+              query    = query.split(/[\. ]/);
+              maxDepth = query.length - 1;
+              $.each(query, function(depth, value) {
+                var camelCaseValue = (depth != maxDepth)
+                  ? value + query[depth + 1].charAt(0).toUpperCase() + query[depth + 1].slice(1)
+                  : query
+                ;
+                if( $.isPlainObject( object[camelCaseValue] ) && (depth != maxDepth) ) {
+                  object = object[camelCaseValue];
+                }
+                else if( object[camelCaseValue] !== undefined ) {
+                  found = object[camelCaseValue];
+                  return false;
+                }
+                else if( $.isPlainObject( object[value] ) && (depth != maxDepth) ) {
+                  object = object[value];
+                }
+                else if( object[value] !== undefined ) {
+                  found = object[value];
+                  return false;
+                }
+                else {
+                  module.error(query);
+                  return false;
+                }
+              });
+            }
+            if ( $.isFunction( found ) ) {
+              response = found.apply(context, passedArguments);
+            }
+            else if(found !== undefined) {
+              response = found;
+            }
+            if($.isArray(returnedValue)) {
+              returnedValue.push(response);
+            }
+            else if(returnedValue !== undefined) {
+              returnedValue = [returnedValue, response];
+            }
+            else if(response !== undefined) {
+              returnedValue = response;
+            }
+            return found;
+          }
+        
+        } 
+        
+      }; 
+
+      if(methodInvoked) {
+        if(instance === undefined) {
+          module.initialize();
+        }
+        module.invoke(query);
+      }
+      else {
+        if(instance !== undefined) {
+          instance.invoke('destroy');
+        }
+        module.initialize();
+      }
+    })
+  ;
+  return (returnedValue !== undefined)
+    ? returnedValue
+    : this
+  ;
+};
+
+
+$.fn.push.settings = {
+
+  name        : 'Push',
+  namespace   : 'push',
+
+  debug       : true,
+  verbose     : true,
+  performance : false,
+
+  className   : {
+    active      : 'active',
+    disabled    : 'disabled'
+  },
+  
+};
+
+})( jQuery, window , document );
+
+/*!
  * # Semantic UI 2.0.0 - Rating
  * http://github.com/semantic-org/semantic-ui/
  *
@@ -16150,6 +16513,19 @@ function utilReadableTime(timeMs) {
   return readable;
 }
 
+function utilVoidCallback(event) {
+  event.preventDefault();
+  $(this).blur();
+}
+
+function utilAddNamespaceToEvents(events, namespace) {
+  var events_with_namespace = [];
+  while(events.length > 0) {
+    events_with_namespace.push(events.pop() + namespace)
+  }
+  return events_with_namespace.join(' ');
+}
+
 $.fn.video = function(parameters) {
 
   var
@@ -16211,16 +16587,13 @@ $.fn.video = function(parameters) {
         $seekableCheckbox           = $module.find(settings.selector.seekableCheckbox),
         $playedCheckbox             = $module.find(settings.selector.playedCheckbox),
         $seekingStateCheckbox       = $module.find(settings.selector.seekingStateCheckbox),
-        $seekingStateDimmer         = $module.find(settings.selector.seekingStateDimmer).dimmer({duration:{hide:1000}}),
+        $seekingStateDimmer         = $module.find(settings.selector.seekingStateDimmer),
 
         timeRangeUpdateEnabled      = true,
         timeRangeInterval           = $timeRange.prop('max') - $timeRange.prop('min'),
         
-        seekLoopCounter             = window.setTimeout(1, function(){} ), // subsequent calls to window.clearTimeout won't break
         seekLoopInitialPlayState    = undefined, // it actually means undefined, see seek.tickLoop and seek.stopLoop functions,
-        seekLoopStarted             = false,
-      
-        seekedDelay                 = window.setTimeout(1, function(){} ), // subsequent calls to window.clearTimeout won't break
+        seekedTimer                 = window.setTimeout(1, function(){} ), // subsequent calls to window.clearTimeout won't break
 
         element                     = this,
         video                       = $video.get(0),
@@ -16233,6 +16606,7 @@ $.fn.video = function(parameters) {
         initialize: function() {
           module.debug('Initializing video');
           module.instantiate();
+          module.bind.pushes();
           module.bind.events();
           module.initialValues(); 
         },
@@ -16246,42 +16620,47 @@ $.fn.video = function(parameters) {
         },
         
         bind: {
+          pushes: function() {
+            // sub-module init
+            $seekButton.push({
+              onStart: module.activate.holdPlayState,
+              onStop: module.deactivate.holdPlayState
+            });
+          },
           events: function() {
             module.debug('Binding video module events');
             // from video to UI
             $video
-              .on('play' + eventNamespace + ' playing' + eventNamespace + ' pause' + eventNamespace + ' ended' + eventNamespace, module.update.playState)
-              .on('ratechange' + eventNamespace, module.update.rate)
-              .on('timeupdate' + eventNamespace, module.update.time) // TODO limit throttle
-              .on('seeking' + eventNamespace, module.update.seeking)
-              .on('seeked' + eventNamespace, module.update.seeked)
-              .on('volumechange' + eventNamespace, module.update.volume)
-              .on('canplaythrough' + eventNamespace + ' canplay' + eventNamespace + ' loadeddata' + eventNamespace + ' loadedmetadata' + eventNamespace + ' emptied' + eventNamespace + ' waiting' + eventNamespace, module.update.readyState)
-              .on('error' + eventNamespace + ' loadstart' + eventNamespace + ' emptied' + eventNamespace + ' stalled' + eventNamespace + ' suspend' + eventNamespace + ' waiting' + eventNamespace + ' loadedmetadata' + eventNamespace + ' loadeddata' + eventNamespace, module.update.networkState)
+              .on(utilAddNamespaceToEvents(['play', 'playing', 'pause', 'ended'], eventNamespace), module.update.playState)
+              .on(utilAddNamespaceToEvents(['ratechange'], eventNamespace), module.update.rate)
+              .on(utilAddNamespaceToEvents(['timeupdate'], eventNamespace), module.update.time) // TODO limit throttle
+              .on(utilAddNamespaceToEvents(['seeking'], eventNamespace), module.update.seeking)
+              .on(utilAddNamespaceToEvents(['seeked'], eventNamespace), module.update.seeked)
+              .on(utilAddNamespaceToEvents(['volumechange'], eventNamespace), module.update.volume)
+              .on(utilAddNamespaceToEvents(['canplaythrough', 'canplay', 'loadeddata', 'emptied', 'waiting'], eventNamespace), module.update.readyState)
+              .on(utilAddNamespaceToEvents(['error', 'loadstart', 'emptied', 'stalled', 'suspend', 'waiting', 'loadedmetadata', 'loadeddata'], eventNamespace), module.update.networkState)
             ;
             
             // from UI to video
-            $playButton
-              .on('click' + eventNamespace, module.request.playToggle)
-            ;
-            $seekButton
-              .on('mousedown' + eventNamespace, module.request.seek.tickLoop)
-              .on('mouseup' + eventNamespace + 'mouseleave' + eventNamespace + 'mouseout' + eventNamespace + 'click' + eventNamespace, module.request.seek.stopLoop)
-            ;
+            $playButton.on(utilAddNamespaceToEvents(['click'], eventNamespace), module.request.playToggle);
+            $seekButton.on(utilAddNamespaceToEvents(['click'], eventNamespace), module.request.seek.toRelativeTime);
             $timeRange
-              .on('change' + eventNamespace, module.request.seek.fromRangeValue) 
-              .on('mousedown' + eventNamespace, module.deactivate.timeRangeUpdate)
-              .on('mouseup' + eventNamespace, module.activate.timeRangeUpdate)
+              .on(utilAddNamespaceToEvents(['change'], eventNamespace), module.request.seek.fromRangeValue)
+              .on(utilAddNamespaceToEvents(['mousedown'], eventNamespace), module.deactivate.timeRangeUpdate)
+              .on(utilAddNamespaceToEvents(['mouseup'], eventNamespace), module.activate.timeRangeUpdate)
+              .on(utilAddNamespaceToEvents(['click'], eventNamespace), utilVoidCallback)
+              //.on(utilAddNamespaceToEvents(['focus'], eventNamespace), module.activate.timeLookup) // better naming than timeLookup ?
+              //.on(utilAddNamespaceToEvents(['blur'], eventNamespace), module.deactivate.timeLookup)
             ;
-            $volumeUpButton.on('click' + eventNamespace, module.request.volumeUp);
-            $volumeDownButton.on('click' + eventNamespace, module.request.volumeDown);
-            $volumeProgress.on('click' + eventNamespace, module.request.unmute);
-            $muteButton.on('click' + eventNamespace, module.request.muteToggle);
-            $rateInput.on('change' + eventNamespace, module.request.rate);
-            $rateReset.on('click' + eventNamespace, module.reset.rate);
-            $readyStateRadio.on('click' + eventNamespace, module.request.denied);
-            $networkStateRadio.on('click' + eventNamespace, module.request.denied); // preventDefault
-            $statesLabel.on('click' + eventNamespace, module.request.denied); // preventDefault
+            $volumeUpButton.on(utilAddNamespaceToEvents(['click'], eventNamespace), module.request.volumeUp);
+            $volumeDownButton.on(utilAddNamespaceToEvents(['click'], eventNamespace), module.request.volumeDown);
+            $volumeProgress.on(utilAddNamespaceToEvents(['click'], eventNamespace), module.request.unmute);
+            $muteButton.on(utilAddNamespaceToEvents(['click'], eventNamespace), module.request.muteToggle);
+            $rateInput.on(utilAddNamespaceToEvents(['change'], eventNamespace), module.request.rate);
+            $rateReset.on(utilAddNamespaceToEvents(['click'], eventNamespace), module.reset.rate);
+            $readyStateRadio.on(utilAddNamespaceToEvents(['click'], eventNamespace), module.request.denied);
+            $networkStateRadio.on(utilAddNamespaceToEvents(['click'], eventNamespace), utilVoidCallback);
+            $statesLabel.on(utilAddNamespaceToEvents(['click'], eventNamespace), utilVoidCallback);
           }
         },
         
@@ -16401,21 +16780,27 @@ $.fn.video = function(parameters) {
             if(timeRangeUpdateEnabled) {
               $timeRange.val( timeRangeInterval * currentTime / duration );
             }
-            // is currentTime in various TimeRanges (should always be true whern play is on)
-            $bufferCheckbox.prop('checked', module.is.timeBuffered(currentTime));
-            $seekableCheckbox.prop('checked', module.is.timeSeekable(currentTime));
-            $playedCheckbox.prop('checked', module.is.timePlayed(currentTime));
+            // TODO: refactor as a virtual time indicator based on the time range "dragged" time
+            // wether the currentTime fits in various TimeRanges ()
+            // NOTE: should always be true when normal expected play is on, since "played" seems to be written before to be read (on FF 38.0.1)
+            // $bufferCheckbox.prop('checked', module.is.timeBuffered(currentTime));
+            // $seekableCheckbox.prop('checked', module.is.timeSeekable(currentTime));
+            // $playedCheckbox.prop('checked', module.is.timePlayed(currentTime));
           },
           seeking: function() {
             module.debug('Update seek state (seeking)');
-            window.clearTimeout(seekedDelay);
+            window.clearTimeout(seekedTimer);
             $seekingStateCheckbox.prop('checked', true);
             $seekingStateDimmer.dimmer('show');
           },
-          seeked: function() {
+          seeked: function(event) {
             module.debug('Update seek state (seeked)');
-            // a seeking loop makes "seeking" and "seeked" events to fire alternatively, making the elements to blink
-            if(!seekLoopStarted && !module.is.seeking()) { 
+            // a seeking loop makes "seeking" and "seeked" events to fire alternatively, add a delay to prevent the elements to blink
+            if(event !== undefined) {
+              // an real undelayed event has occured 
+              seekedTimer = window.setTimeout(module.update.seeked, setttings.seekedDelay);
+            } else {
+              // it has been delayed and now is handled through the UI
               $seekingStateCheckbox.prop('checked', false);
               $seekingStateDimmer.dimmer('hide');
             }
@@ -16502,39 +16887,6 @@ $.fn.video = function(parameters) {
               var ratio = $timeRange.val() / timeRangeInterval;
               var position = module.get.duration() * ratio;
               module.request.seek.toAbsoluteTime(position);
-            },
-            tickLoop: function() {
-              // TODO: abstract to a 'push' button behavior ?
-              module.debug('Tick seek loop');
-              window.clearTimeout(seekLoopCounter);
-              if(seekLoopInitialPlayState === undefined) {
-                // force pause while loop seeking
-                seekLoopInitialPlayState = module.is.playing();
-                module.request.pause();
-              } else {
-                // don't move on the first iteration
-                seekLoopStarted = true;
-                module.request.seek.toRelativeTime.bind(this)();
-              }
-              // bindings are made in order to later access $(this)
-              seekLoopCounter = window.setTimeout(module.request.seek.tickLoop.bind(this), parseInt( $(this).data('seek-interval') ));
-            },
-            stopLoop: function() {
-              module.debug('Stop seek loop');
-              window.clearTimeout(seekLoopCounter);
-              if(seekLoopInitialPlayState) {
-                module.request.play();
-              } 
-              seekLoopInitialPlayState = undefined;
-              
-              // one final move if the loop has 0 iteration (~ click)
-              if(!seekLoopStarted) {
-                module.request.seek.toRelativeTime.bind(this)();
-              }
-              seekLoopStarted = false;
-              
-              // the seek indicator might have been force-enabled during the loop
-              module.update.seeked();
             }
           },
           volumeUp: function() {
@@ -16575,6 +16927,11 @@ $.fn.video = function(parameters) {
           timeRangeUpdate: function() {
             module.debug('Activate timeRange autoupdate');
             timeRangeUpdateEnabled = true;
+          },
+          holdPlayState: function() {
+            module.debug('Hold play state (while an other operation is occuring)');
+            seekLoopInitialPlayState = module.is.playing();
+            module.request.pause();
           }
         },
         
@@ -16582,6 +16939,13 @@ $.fn.video = function(parameters) {
           timeRangeUpdate: function() {
             module.debug('Deactivate timeRange autoupdate');
             timeRangeUpdateEnabled = false;
+          },
+          holdPlayState: function() {
+            module.debug('Unhold play state (after an other operation has occured)');
+            if(seekLoopInitialPlayState) {
+              module.request.play();
+            }
+            seekLoopInitialPlayState = undefined;
           }
         },
         
@@ -16808,7 +17172,7 @@ $.fn.video.settings = {
 
   debug       : true,
   verbose     : true,
-  performance : true,
+  performance : false,
 
   className   : {
     active      : 'active',
@@ -16855,6 +17219,7 @@ $.fn.video.settings = {
   },
   
   volumeStep: 0.1 // it moves from 0.0 to 1.0, TODO: use a data-* attribute
+  seekedDelay: 250 // ms
   
 };
 
