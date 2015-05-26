@@ -16588,6 +16588,8 @@ $.fn.video = function(parameters) {
         $playedCheckbox             = $module.find(settings.selector.playedCheckbox),
         $seekingStateCheckbox       = $module.find(settings.selector.seekingStateCheckbox),
         $seekingStateDimmer         = $module.find(settings.selector.seekingStateDimmer),
+        $timeLookupActivator        = $timeRange.parent('.ui.input'),
+        $timeLookupValue            = $module.find(settings.selector.timeLookupValue),
 
         timeRangeUpdateEnabled      = true,
         timeRangeInterval           = $timeRange.prop('max') - $timeRange.prop('min'),
@@ -16607,6 +16609,7 @@ $.fn.video = function(parameters) {
           module.debug('Initializing video');
           module.instantiate();
           module.bind.pushes();
+          module.bind.popups();
           module.bind.events();
           module.initialValues(); 
         },
@@ -16627,6 +16630,14 @@ $.fn.video = function(parameters) {
               onStop: module.deactivate.holdPlayState
             });
           },
+          popups: function() {
+            $timeLookupActivator.popup({
+              popup: $module.find(settings.selector.timeLookupPopup),
+              position: 'top center',
+              on: 'manual',
+              preserve: true,
+            });
+          },
           events: function() {
             module.debug('Binding video module events');
             // from video to UI
@@ -16645,12 +16656,10 @@ $.fn.video = function(parameters) {
             $playButton.on(utilAddNamespaceToEvents(['click'], eventNamespace), module.request.playToggle);
             $seekButton.on(utilAddNamespaceToEvents(['click'], eventNamespace), module.request.seek.toRelativeTime);
             $timeRange
+              .on(utilAddNamespaceToEvents(['mousedown'], eventNamespace), module.activate.timeLookup)
+              .on(utilAddNamespaceToEvents(['mouseup'], eventNamespace), module.deactivate.timeLookup)
+              .on(utilAddNamespaceToEvents(['input'], eventNamespace), module.update.timeLookup)
               .on(utilAddNamespaceToEvents(['change'], eventNamespace), module.request.seek.fromRangeValue)
-              .on(utilAddNamespaceToEvents(['mousedown'], eventNamespace), module.deactivate.timeRangeUpdate)
-              .on(utilAddNamespaceToEvents(['mouseup'], eventNamespace), module.activate.timeRangeUpdate)
-              .on(utilAddNamespaceToEvents(['click'], eventNamespace), utilVoidCallback)
-              //.on(utilAddNamespaceToEvents(['focus'], eventNamespace), module.activate.timeLookup) // better naming than timeLookup ?
-              //.on(utilAddNamespaceToEvents(['blur'], eventNamespace), module.deactivate.timeLookup)
             ;
             $volumeUpButton.on(utilAddNamespaceToEvents(['click'], eventNamespace), module.request.volumeUp);
             $volumeDownButton.on(utilAddNamespaceToEvents(['click'], eventNamespace), module.request.volumeDown);
@@ -16669,7 +16678,7 @@ $.fn.video = function(parameters) {
           module.update.volume();
         },
         
-        // the functions in the both 'get' and 'is' range will query the video element and return the current value
+        // the functions in the both 'get' and 'is' range will query the elements and return the current value
         get: {
           
           pausedState: function() {
@@ -16729,6 +16738,9 @@ $.fn.video = function(parameters) {
               case $video.prop('NETWORK_LOADING'): return settings.constants.NETWORK_LOADING; break;
               case $video.prop('NETWORK_NO_SOURCE'): return settings.constants.NETWORK_NO_SOURCE; break;
             } 
+          },
+          timeRangeValue: function() { // as time
+            return module.get.duration() * $timeRange.val() / timeRangeInterval;
           }
         },
         is: {
@@ -16777,15 +16789,10 @@ $.fn.video = function(parameters) {
             $currentTime.text(utilReadableTime(currentTime));
             $remainingTime.text( utilReadableTime(duration - currentTime) );
             // range display, prevent it to update when it has been 'mousedown'ed but not 'change'd yet
+            console.log(timeRangeUpdateEnabled);
             if(timeRangeUpdateEnabled) {
               $timeRange.val( timeRangeInterval * currentTime / duration );
             }
-            // TODO: refactor as a virtual time indicator based on the time range "dragged" time
-            // wether the currentTime fits in various TimeRanges ()
-            // NOTE: should always be true when normal expected play is on, since "played" seems to be written before to be read (on FF 38.0.1)
-            // $bufferCheckbox.prop('checked', module.is.timeBuffered(currentTime));
-            // $seekableCheckbox.prop('checked', module.is.timeSeekable(currentTime));
-            // $playedCheckbox.prop('checked', module.is.timePlayed(currentTime));
           },
           seeking: function() {
             module.debug('Update seek state (seeking)');
@@ -16835,6 +16842,15 @@ $.fn.video = function(parameters) {
             module.debug('Update network state');
             $networkStateRadio.filter('[value=' + module.get.networkState() + ']').prop('checked', true);
           },
+          timeLookup: function(event) {
+            // virtual time indicator based on the $timeRange "dragged" time
+            module.debug('Update timelookup state');
+            var time = module.get.timeRangeValue();
+            $bufferCheckbox.prop('checked', module.is.timeBuffered(time));
+            $seekableCheckbox.prop('checked', module.is.timeSeekable(time));
+            $playedCheckbox.prop('checked', module.is.timePlayed(time));
+            $timeLookupValue.text(utilReadableTime(time));
+          }
         },
         
         // the functions in this range will change the video element state, with no relevant return value
@@ -16884,9 +16900,7 @@ $.fn.video = function(parameters) {
             },
             fromRangeValue: function() {
               module.debug('Request time seek from absolute range value');
-              var ratio = $timeRange.val() / timeRangeInterval;
-              var position = module.get.duration() * ratio;
-              module.request.seek.toAbsoluteTime(position);
+              module.request.seek.toAbsoluteTime(module.get.timeRangeValue());
             }
           },
           volumeUp: function() {
@@ -16924,28 +16938,30 @@ $.fn.video = function(parameters) {
         },
          
         activate: {
-          timeRangeUpdate: function() {
-            module.debug('Activate timeRange autoupdate');
-            timeRangeUpdateEnabled = true;
-          },
           holdPlayState: function() {
             module.debug('Hold play state (while an other operation is occuring)');
             seekLoopInitialPlayState = module.is.playing();
             module.request.pause();
+          },
+          timeLookup: function() {
+            module.debug('Activate time lookup');
+            $timeLookupActivator.popup('show');
+            timeRangeUpdateEnabled = false;
           }
         },
         
         deactivate: {
-          timeRangeUpdate: function() {
-            module.debug('Deactivate timeRange autoupdate');
-            timeRangeUpdateEnabled = false;
-          },
           holdPlayState: function() {
             module.debug('Unhold play state (after an other operation has occured)');
             if(seekLoopInitialPlayState) {
               module.request.play();
             }
             seekLoopInitialPlayState = undefined;
+          },
+          timeLookup: function() {
+            module.debug('Deactivate time lookup');
+            $timeLookupActivator.popup('hide');
+            timeRangeUpdateEnabled = true;
           }
         },
         
@@ -17171,7 +17187,7 @@ $.fn.video.settings = {
   namespace   : 'video',
 
   debug       : true,
-  verbose     : true,
+  verbose     : false,
   performance : false,
 
   className   : {
@@ -17199,7 +17215,9 @@ $.fn.video.settings = {
     bufferCheckbox:         '.buffer.checkbox input[type="checkbox"]',    // 
     seekableCheckbox:       '.seekable.checkbox input[type="checkbox"]',  //
     playedCheckbox:         '.played.checkbox input[type="checkbox"]',    //
-    statesLabel:            '.ready.state label, .network.state label, .buffer.checkbox label, .seekable.checkbox label, .played.checkbox label'
+    statesLabel:            '.ready.state label, .network.state label, .buffer.checkbox label, .seekable.checkbox label, .played.checkbox label',
+    timeLookupPopup:        '.timelookup.popup',
+    timeLookupValue:        '.timelookup.popup .time'
     
   },
   
