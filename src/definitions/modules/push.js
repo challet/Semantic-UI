@@ -13,14 +13,6 @@
 
 "use strict";
 
-function utilAddNamespaceToEvents(events, namespace) {
-  var events_with_namespace = [];
-  while(events.length > 0) {
-    events_with_namespace.push(events.pop() + namespace)
-  }
-  return events_with_namespace.join(' ');
-}
-
 $.fn.push = function(parameters) {
 
   var
@@ -92,45 +84,45 @@ $.fn.push = function(parameters) {
           events: function() {
             module.debug('Binding push module events');
             $module
-              .on(utilAddNamespaceToEvents(['mousedown'], eventNamespace), module.tickLoop)
-              .on(utilAddNamespaceToEvents(['mouseup', 'mouseleave', 'mouseout'], eventNamespace), module.stopLoop) // /!\ don't add 'click' or recursive hole
-              .on(utilAddNamespaceToEvents(['click'], eventNamespace), module.filterClick)
+              .on('mousedown' + eventNamespace, module.tickLoop)
+              .on('mouseup' + eventNamespace + ' mouseleave' + eventNamespace, module.stopLoop) // /!\ don't add 'click' or recursive hole
+              .on('click' + eventNamespace, module.filterClick)
             ;
           }
         },
         
-        
         tickLoop: function() {
-          module.debug('loop iterates');
-          
           // don't move on the first iteration (actual mousedown event)
           if(tickTimer !== null) {
             hadTicked = true;
             $module.click() // .trigger() seems not to be DOM related, but only jQuery internal (?)
           } else {
-            console.log('onStart');
+            module.debug('loop starts');
             settings.onStart();
           }
           // (re)start the loop, bindings are made in order to later access $(this)
-          tickTimer = window.setTimeout(module.tickLoop.bind(this), parseInt( $(this).data('push-interval') ));
+          tickTimer = window.setTimeout(module.tickLoop.bind(this), parseInt( $(this).data(settings.metadata.pushInterval) ));
         },
         
         stopLoop: function(event) {
-          module.debug('loop stops');
-          // one click if the loop hadn't ticked (~ real click)
-          if(tickTimer !== null && !hadTicked) {
-            $module.click() // .trigger() seems not to be DOM related, but only jQuery internal (?)
+          if(tickTimer !== null) {
+            if(!hadTicked) {
+              // one click if the loop hadn't ticked (~ real click)
+              module.debug('loop iterates');
+              $module.click() // .trigger() seems not to be DOM related, but only jQuery internal (?)
+            }
+            module.debug('loop stops');
+            window.clearTimeout(tickTimer);
+            tickTimer = null;
+            hadTicked = false;
+            settings.onStop();
           }
-          window.clearTimeout(tickTimer);
-          tickTimer = null;
-          hadTicked = false;
-          settings.onStop();
         },
         
         filterClick: function(event) {
-           module.debug('click is filtered');
-          // human clicks are void (though they are re-triggered though the mousedown/mouseup behaviors combination)
+          // human clicks are void (though they are re-triggered through the mousedown/mouseup behaviors combination)
           if(event.isTrigger === undefined) {
+            module.debug('click is filtered');
             event.stopImmediatePropagation(); // it requires .push() event bindings to have been done before any other init
             event.preventDefault();
           }
@@ -348,13 +340,17 @@ $.fn.push.settings = {
   name        : 'Push',
   namespace   : 'push',
 
-  debug       : true,
-  verbose     : true,
+  debug       : false,
+  verbose     : false,
   performance : false,
 
   className   : {
     active      : 'active',
     disabled    : 'disabled'
+  },
+  
+  metadata: {
+    pushInterval: 'push-interval'
   },
   
   onStart: function() {},

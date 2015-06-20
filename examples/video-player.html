@@ -46,21 +46,21 @@
               <div class="ui icon mute button">
                 <i class="icon volume off"></i>
               </div>
-              <div class="ui icon volume down push button" style="margin-right: 0; pointer-events: auto;" data-volume-step="0.1" data-push-interval="500">
+              <div class="ui icon volume push button" style="margin-right: 0; pointer-events: auto;" data-volume-step="-0.1" data-push-interval="500">
                 <i class="icon volume down"></i>
               </div>
-              <div class="ui volume progress push button" style="display: inline-block; width: 10em; height: 100%; margin:0; vertical-align: bottom;" id="volumeprogress">
+              <div class="ui volume progress" style="display: inline-block; width: 10em; height: 100%; margin:0; vertical-align: bottom;" id="volumeprogress">
                 <div class="bar" style="height: 100%;">
                   <div class="progress"></div>
                 </div>
               </div>
-              <div class="ui icon volume up push button" style="margin-left: 0; pointer-events: auto;" data-volume-step="0.1" data-push-interval="500">
+              <div class="ui icon volume push button" style="margin-left: 0; pointer-events: auto;" data-volume-step="0.1" data-push-interval="500">
                 <i class="icon volume up"></i>
               </div>
             </div>
           
             <div class="six wide column" style="text-align: center;">
-              <div class="ui left icon mini rate input" style="width: 6.8em; vertical-align: bottom;" >
+              <div class="ui left icon mini rate input" style="width: 8em; vertical-align: bottom;" >
                 <input placeholder="play rate" type="number" min="-1" max="5" step="0.25" value="1.0" autocomplete="off" length="2" />
                 <i class="small undo link reset icon "></i>
               </div>
@@ -114,12 +114,6 @@
                     <div class="ui buffer checkbox">
                       <input name="in-buffer" id="state-in-buffer" type="checkbox">
                       <label for="state-in-buffer">in buffer</label>
-                    </div>
-                  </div>
-                  <div class="field">
-                    <div class="ui seekable checkbox">
-                      <input name="seekable" id="state-seekable" type="checkbox">
-                      <label for="state-seekable">seekable</label>
                     </div>
                   </div>
                   <div class="field">
@@ -228,7 +222,27 @@
 <script>
 $(document)
   .ready(function() {
-    $('.ui.video').video();
+    
+    var popup = $('input.time').parent()
+      .popup({
+         popup: $('.timelookup.popup'),
+         position: 'top center',
+         on: 'manual',
+         preserve: true,
+       })
+    ;
+    
+    $('.ui.video')
+     .video({
+        onTimeLookupStart: function() {
+          popup.popup('show');
+        },
+        onTimeLookupStop: function() {
+          popup.popup('hide');
+        },
+      })
+    ;
+    
   })
 ;
 </script>
