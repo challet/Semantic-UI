@@ -7725,8 +7725,10 @@ $.fn.nag.settings = {
 
 })( jQuery, window , document );
 
+
+
 /*!
- * # Semantic UI 2.0.0 - Popup
+ * # Semantic UI - Popup
  * http://github.com/semantic-org/semantic-ui/
  *
  *
@@ -10024,64 +10026,63 @@ $.fn.push = function(parameters) {
               console.groupEnd();
             }
             performance = [];
-          },
-        
-          invoke: function(query, passedArguments, context) {
-            var
-              object = instance,
-              maxDepth,
-              found,
-              response
-            ;
-            passedArguments = passedArguments || queryArguments;
-            context         = element         || context;
-            if(typeof query == 'string' && object !== undefined) {
-              query    = query.split(/[\. ]/);
-              maxDepth = query.length - 1;
-              $.each(query, function(depth, value) {
-                var camelCaseValue = (depth != maxDepth)
-                  ? value + query[depth + 1].charAt(0).toUpperCase() + query[depth + 1].slice(1)
-                  : query
-                ;
-                if( $.isPlainObject( object[camelCaseValue] ) && (depth != maxDepth) ) {
-                  object = object[camelCaseValue];
-                }
-                else if( object[camelCaseValue] !== undefined ) {
-                  found = object[camelCaseValue];
-                  return false;
-                }
-                else if( $.isPlainObject( object[value] ) && (depth != maxDepth) ) {
-                  object = object[value];
-                }
-                else if( object[value] !== undefined ) {
-                  found = object[value];
-                  return false;
-                }
-                else {
-                  module.error(query);
-                  return false;
-                }
-              });
-            }
-            if ( $.isFunction( found ) ) {
-              response = found.apply(context, passedArguments);
-            }
-            else if(found !== undefined) {
-              response = found;
-            }
-            if($.isArray(returnedValue)) {
-              returnedValue.push(response);
-            }
-            else if(returnedValue !== undefined) {
-              returnedValue = [returnedValue, response];
-            }
-            else if(response !== undefined) {
-              returnedValue = response;
-            }
-            return found;
           }
+        },
         
-        } 
+        invoke: function(query, passedArguments, context) {
+          var
+            object = instance,
+            maxDepth,
+            found,
+            response
+          ;
+          passedArguments = passedArguments || queryArguments;
+          context         = element         || context;
+          if(typeof query == 'string' && object !== undefined) {
+            query    = query.split(/[\. ]/);
+            maxDepth = query.length - 1;
+            $.each(query, function(depth, value) {
+              var camelCaseValue = (depth != maxDepth)
+                ? value + query[depth + 1].charAt(0).toUpperCase() + query[depth + 1].slice(1)
+                : query
+              ;
+              if( $.isPlainObject( object[camelCaseValue] ) && (depth != maxDepth) ) {
+                object = object[camelCaseValue];
+              }
+              else if( object[camelCaseValue] !== undefined ) {
+                found = object[camelCaseValue];
+                return false;
+              }
+              else if( $.isPlainObject( object[value] ) && (depth != maxDepth) ) {
+                object = object[value];
+              }
+              else if( object[value] !== undefined ) {
+                found = object[value];
+                return false;
+              }
+              else {
+                module.error(query);
+                return false;
+              }
+            });
+          }
+          if ( $.isFunction( found ) ) {
+            response = found.apply(context, passedArguments);
+          }
+          else if(found !== undefined) {
+            response = found;
+          }
+          if($.isArray(returnedValue)) {
+            returnedValue.push(response);
+          }
+          else if(returnedValue !== undefined) {
+            returnedValue = [returnedValue, response];
+          }
+          else if(response !== undefined) {
+            returnedValue = response;
+          }
+          return found;
+        }
         
       }; 
 
@@ -10126,6 +10127,7 @@ $.fn.push.settings = {
   
   onStart: function() {},
   onStop: function() {},
+  onReset: function() {}
   
 };
 
@@ -16547,14 +16549,15 @@ $.fn.video = function(parameters) {
         $timeLookupBuffer           = $module.find(settings.selector.timeLookupBuffer),
         $timeLookupPlayed           = $module.find(settings.selector.timeLookupPlayed),
         $seekingStateCheckbox       = $module.find(settings.selector.seekingStateCheckbox),
-        $seekingStateDimmer         = $module.find(settings.selector.seekingStateDimmer),
+        $loaderDimmer               = $module.find(settings.selector.loaderDimmer),
         $timeLookupValue            = $module.find(settings.selector.timeLookupValue),
+        $sourcePicker               = $module.find(settings.selector.sourcePicker),
 
         timeRangeUpdateEnabled      = true,
         timeRangeInterval           = $timeRange.prop('max') - $timeRange.prop('min'),
         
         seekLoopInitialPlayState    = undefined, // it actually means undefined, see activate.holdPlayState and deactivate.holdPlayState functions,
-        seekedTimer                 = window.setTimeout(1, function(){} ), // subsequent calls to window.clearTimeout won't break
+        loaderDelay                 = window.setTimeout(1, function(){} ), // subsequent calls to window.clearTimeout won't break
 
         element                     = this,
         video                       = $video.get(0),
@@ -16567,7 +16570,6 @@ $.fn.video = function(parameters) {
         initialize: function() {
           module.debug('Initializing video');
           module.instantiate();
-          module.bind.pushes();
           module.bind.events();
           module.initialValues(); 
         },
@@ -16581,14 +16583,6 @@ $.fn.video = function(parameters) {
         },
         
         bind: {
-          pushes: function() {
-            // sub-module init
-            $seekButton.push({
-              onStart: module.activate.holdPlayState,
-              onStop: module.deactivate.holdPlayState
-            });
-            $volumeChangeButton.push();
-          },
           
           events: function() {
             module.debug('Binding video module events');
@@ -16613,9 +16607,20 @@ $.fn.video = function(parameters) {
                   ' waiting'        + eventNamespace, module.update.networkState)
               .on('ratechange'      + eventNamespace, module.update.rate)
               .on('timeupdate'      + eventNamespace, module.update.time)
-              .on('seeking'         + eventNamespace, module.update.seeking)
-              .on('seeked'          + eventNamespace, module.update.seeked)
+              .on('seeking'         + eventNamespace, module.activate.loader)
+              .on('seeked'          + eventNamespace, module.deactivate.loader)
               .on('volumechange'    + eventNamespace, module.update.volume)
+              .on('emptied'         + eventNamespace, function() {
+                module.reset.time();
+                module.activate.loader();
+                module.deactivate.timeRange();
+              })
+              .on('loadedmetadata'  + eventNamespace + 
+                  ' loadeddata'     + eventNamespace, function() {
+                module.update.time();
+                module.deactivate.loader();
+                module.activate.timeRange();
+              })
             ;
             
             // from UI to video
@@ -16647,15 +16652,17 @@ $.fn.video = function(parameters) {
               .on('click'           + eventNamespace, module.reset.rate)
             ;
             $readyStateRadio
-              .on('click'           + eventNamespace, module.request.denied)
+              .on('click'           + eventNamespace, module.request.void)
             ;
             $networkStateRadio
-              .on('click'           + eventNamespace, module.request.denied)
+              .on('click'           + eventNamespace, module.request.void)
             ;
             $statesLabel
-              .on('click'           + eventNamespace, module.request.denied)
+              .on('click'           + eventNamespace, module.request.void)
             ;
-            $seekButton.add()
+            $sourcePicker
+              .on('change'           + eventNamespace, module.request.source)
+            ;
           }
         },
         
@@ -16666,6 +16673,7 @@ $.fn.video = function(parameters) {
           module.update.rate();
           module.update.readyState();
           module.update.networkState();
+          // TODO : filter sources by type
         },
         
         // the functions in the both 'get' and 'is' range will query the elements and return the current value
@@ -16699,7 +16707,6 @@ $.fn.video = function(parameters) {
             return $video.prop('playbackRate'); // float, limits depend on browsers implementations
           },
           readyState: function() {
-            // use module related constants
             var state;
             switch($video.prop('readyState')) {
               default:
@@ -16719,10 +16726,13 @@ $.fn.video = function(parameters) {
                 state = settings.constants.HAVE_ENOUGH_DATA;
                 break;
             }
+            // outputs SUI module related constants
             return state;
           },
           networkState: function() {
-            // use module related constants
+            // TODO check wether the browsers actually update this prop, primary tests look like it is stuck on
+            // - NETWORK_LOADING with FF 37.0.2, 
+            // - NETWORK_IDLE with Chrome 42.0.2311.135
             var state;
             switch($video.prop('networkState')) {
               default:
@@ -16739,6 +16749,7 @@ $.fn.video = function(parameters) {
                 state = settings.constants.NETWORK_NO_SOURCE; 
                 break;
             }
+            // outputs SUI module related constants
             return state;
           },
           timeRangeValue: function() { // as time
@@ -16785,6 +16796,21 @@ $.fn.video = function(parameters) {
               }
             }
             return false;
+          },
+          formatSupported: function(mime) {
+            var supported;
+            // see https://developer.mozilla.org/fr/docs/Web/API/HTMLMediaElement#Methods
+            console.log(video.canPlayType(mime));
+            switch(video.canPlayType(mime)) {
+              case 'probably':
+              case 'maybe':
+                supported = true;
+                break;
+              default: 
+                supported = false;
+                break;
+            }
+            return supported;
           }
         },
         
@@ -16804,32 +16830,17 @@ $.fn.video = function(parameters) {
             var
               currentTime = module.get.currentTime(),
               duration = module.get.duration();
-            module.debug('Update time', currentTime);
-            // text displays
-            $currentTime.text(module.get.readableTime(currentTime));
-            $remainingTime.text( module.get.readableTime(duration - currentTime) );
-            // range display, prevent it to update when it has been 'mousedown'ed but not 'change'd yet
-            if(timeRangeUpdateEnabled) {
-              $timeRange.val( timeRangeInterval * currentTime / duration );
-            }
-          },
-          seeking: function() {
-            module.debug('Update seeking state', true);
-            window.clearTimeout(seekedTimer);
-            $seekingStateCheckbox.prop('checked', true);
-            $seekingStateDimmer.dimmer('show');
-          },
-          seeked: function(event) {
-            // a seeking loop makes "seeking" and "seeked" events to fire alternatively, add a delay to prevent the sate to blink
-            if(event !== undefined) {
-              // an native undelayed event has occured 
-              seekedTimer = window.setTimeout(module.update.seeked, settings.seekedDelay);
-            }
-            else {
-              // a delayed call has occured
-              module.debug('Update seeking state', false);
-              $seekingStateCheckbox.prop('checked', false);
-              $seekingStateDimmer.dimmer('hide');
+            if(isNaN(duration)) {
+              module.reset.time();
+            } else {
+              module.debug('Update time', currentTime);
+              // text displays
+              $currentTime.text( module.get.readableTime(currentTime) );
+              $remainingTime.text( module.get.readableTime(duration - currentTime) );
+              // range display, prevent it to update when it has been 'mousedown'ed but not 'change'd yet
+              if(timeRangeUpdateEnabled) {
+                $timeRange.val( timeRangeInterval * currentTime / duration );
+              }
             }
           },
           volume: function() {
@@ -16962,9 +16973,25 @@ $.fn.video = function(parameters) {
               module.request.mute();
             }
           },
-          denied: function(event) {
+          void: function(event) {
             event.preventDefault();
             $(this).blur();
+          },
+          source: function(source, type) {
+            if(typeof source != 'string') {
+              source = $(this).dropdown('get value');
+            }
+            if(typeof type != 'string') {
+              type = $(this).find('select option[value="' + source + '"]').data('video-type');
+            }
+            
+            if(module.is.formatSupported(type)) {
+              module.debug('Request source', source);
+              $video.empty().append($('<source>', {src: source, type: type}));
+              video.load()
+            } else {
+              module.error('Request unsupported type', type, source);
+            }
           }
         },
          
@@ -16974,10 +17001,21 @@ $.fn.video = function(parameters) {
             module.debug('Hold play state', seekLoopInitialPlayState);
             module.request.pause();
           },
+          timeRange: function() {
+            module.debug('Enable timerange');
+            $timeRange.prop('disabled', false);
+          },
           timeLookup: function() {
             settings.onTimeLookupStart();
             timeRangeUpdateEnabled = false;
-          }
+          },
+          loader: function() {
+            module.debug('Activate loader');
+            window.clearTimeout(loaderDelay);
+            //$seekingStateCheckbox.prop('checked', true);
+            $loaderDimmer.dimmer('show');
+          },
+          
         },
         
         deactivate: {
@@ -16991,6 +17029,23 @@ $.fn.video = function(parameters) {
           timeLookup: function() {
             settings.onTimeLookupStop();
             timeRangeUpdateEnabled = true;
+          },
+          timeRange: function() {
+            module.debug('Disable timerange');
+            $timeRange.prop('disabled', true);
+          },
+          loader: function(event) {
+            // a seeking loop makes "seeking" and "seeked" events to fire alternatively, add a delay to prevent the state to blink
+            if(event !== undefined) {
+              // a native undelayed event has occured 
+              loaderDelay = window.setTimeout(module.update.seeked, settings.seekedDelay);
+            }
+            else {
+              // a delayed call has occured
+              module.debug('Unactivate loader');
+              //$seekingStateCheckbox.prop('checked', false);
+              $loaderDimmer.dimmer('hide');
+            }
           }
         },
         
@@ -16999,6 +17054,15 @@ $.fn.video = function(parameters) {
             var defaultRate = video.defaultPlaybackRate;
             module.debug('Reset playBack rate', defaultRate);
             video.playbackRate = defaultRate;
+          },
+          source: function() {
+            module.debug('Reset (empty) source');
+            $video.empty();
+            video.load()
+          },
+          time: function() {
+            module.debug('Reset time');
+            $currentTime.add($remainingTime).text(settings.timeResetText);
           },
           all: function() {
             // TODO: check modules integration
@@ -17010,7 +17074,7 @@ $.fn.video = function(parameters) {
         destroy: function() {
           module.verbose('Destroying previous instance of video');
           $video = null;
-          module.reset();
+          module.reset.all(); // TODO : check module integration
           $module
             .removeData(moduleNamespace)
             .off(eventNamespace)
@@ -17129,64 +17193,63 @@ $.fn.video = function(parameters) {
               console.groupEnd();
             }
             performance = [];
-          },
-        
-          invoke: function(query, passedArguments, context) {
-            var
-              object = instance,
-              maxDepth,
-              found,
-              response
-            ;
-            passedArguments = passedArguments || queryArguments;
-            context         = element         || context;
-            if(typeof query == 'string' && object !== undefined) {
-              query    = query.split(/[\. ]/);
-              maxDepth = query.length - 1;
-              $.each(query, function(depth, value) {
-                var camelCaseValue = (depth != maxDepth)
-                  ? value + query[depth + 1].charAt(0).toUpperCase() + query[depth + 1].slice(1)
-                  : query
-                ;
-                if( $.isPlainObject( object[camelCaseValue] ) && (depth != maxDepth) ) {
-                  object = object[camelCaseValue];
-                }
-                else if( object[camelCaseValue] !== undefined ) {
-                  found = object[camelCaseValue];
-                  return false;
-                }
-                else if( $.isPlainObject( object[value] ) && (depth != maxDepth) ) {
-                  object = object[value];
-                }
-                else if( object[value] !== undefined ) {
-                  found = object[value];
-                  return false;
-                }
-                else {
-                  module.error(query);
-                  return false;
-                }
-              });
-            }
-            if ( $.isFunction( found ) ) {
-              response = found.apply(context, passedArguments);
-            }
-            else if(found !== undefined) {
-              response = found;
-            }
-            if($.isArray(returnedValue)) {
-              returnedValue.push(response);
-            }
-            else if(returnedValue !== undefined) {
-              returnedValue = [returnedValue, response];
-            }
-            else if(response !== undefined) {
-              returnedValue = response;
-            }
-            return found;
           }
+        },
         
-        } 
+        invoke: function(query, passedArguments, context) {
+          var
+            object = instance,
+            maxDepth,
+            found,
+            response
+          ;
+          passedArguments = passedArguments || queryArguments;
+          context         = element         || context;
+          if(typeof query == 'string' && object !== undefined) {
+            query    = query.split(/[\. ]/);
+            maxDepth = query.length - 1;
+            $.each(query, function(depth, value) {
+              var camelCaseValue = (depth != maxDepth)
+                ? value + query[depth + 1].charAt(0).toUpperCase() + query[depth + 1].slice(1)
+                : query
+              ;
+              if( $.isPlainObject( object[camelCaseValue] ) && (depth != maxDepth) ) {
+                object = object[camelCaseValue];
+              }
+              else if( object[camelCaseValue] !== undefined ) {
+                found = object[camelCaseValue];
+                return false;
+              }
+              else if( $.isPlainObject( object[value] ) && (depth != maxDepth) ) {
+                object = object[value];
+              }
+              else if( object[value] !== undefined ) {
+                found = object[value];
+                return false;
+              }
+              else {
+                module.error(query);
+                return false;
+              }
+            });
+          }
+          if ( $.isFunction( found ) ) {
+            response = found.apply(context, passedArguments);
+          }
+          else if(found !== undefined) {
+            response = found;
+          }
+          if($.isArray(returnedValue)) {
+            returnedValue.push(response);
+          }
+          else if(returnedValue !== undefined) {
+            returnedValue = [returnedValue, response];
+          }
+          else if(response !== undefined) {
+            returnedValue = response;
+          }
+          return found;
+        }
         
       }; 
 
@@ -17237,13 +17300,14 @@ $.fn.video.settings = {
     muteButton:             '.mute.button',
     rateInput:              '.rate input[type="number"]',
     rateReset:              '.rate .reset',
-    seekingStateCheckbox:   '.seeking.checkbox input[type="checkbox"]',
-    seekingStateDimmer:     '.seeking.dimmer',
+    //seekingStateCheckbox:   '.seeking.checkbox input[type="checkbox"]',
+    loaderDimmer:           '.load.dimmer',
     readyStateRadio:        '.ready.state input[type="radio"]',           // could work with <select>
     networkStateRadio:      '.network.state input[type="radio"]',         // |
     timeLookupValue:        '.timelookup .time',
     timeLookupBuffer:       '.timelookup .buffer.checkbox input[type="checkbox"]',
     timeLookupPlayed:       '.timelookup .played.checkbox input[type="checkbox"]',
+    sourcePicker:           '.source.picker', // it needs to be .dropdown() initialized
     
     statesLabel:            '.ready.state label, .network.state label, .timelookup .buffer.checkbox label, .timelookup .played.checkbox label'
     
@@ -17270,9 +17334,11 @@ $.fn.video.settings = {
   },
   
   seekedDelay: 250, // ms
+  timeResetText: '0:00:00',
   
   onTimeLookupStart: function() {},
-  onTimeLookupStop: function() {}
+  onTimeLookupStop: function() {},
+  onReset: function() {}
   
 };
 
